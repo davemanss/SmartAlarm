@@ -1,0 +1,337 @@
+#include <LiquidCrystal.h>
+LiquidCrystal lcd(12, 11, 10, 9, 8, 7);
+
+int SleepTime = 2700; //Temps de sommeil  8h
+int SnoozeTime = 2000; //Temps prolongement snooze 15 minutes
+int mode = 0; //0 = éteint, 1= endormissement, 
+          //2= sommeil, 3 = alarme, 4 = snooze, 5 = no response, 6 = data
+
+int pinButton1 = 6; //start
+int pinButton2 = 2; //snooze
+int pinButton3 = 3; //stop
+int pinVibreur = 4;
+int pinCapInf = 5;
+
+float temp;
+int tempPin = 0;
+
+//Données data
+int CTendormissement = 0;
+int CTsnooze = 0;
+int CTsleepback = 0;
+int tempsendormissement =0;
+int tempsdesommeil =0;
+int sommetemp = 0;
+int moyennetemp =0;
+
+
+
+int sleepstep = 0;
+int compteur = 0;
+int compteurbis = 0; 
+int tauxImo = 0;
+
+int maxTime = SleepTime;
+int actualTime = 0;
+int Incrementation = 10*1000; // récurrence boucle : 10 secondes
+bool etatUtilisateur = HIGH; // LOW = endormi, HIGH = eveillé
+
+void setup() {
+  lcd.begin(16,2);
+  lcd.setCursor(0,0);
+  lcd.print("Bonsoir");
+  lcd.setCursor(0,1);
+  lcd.print("App. sur start");
+ 
+  pinMode(pinButton1, INPUT);      // declare Button1 as input
+  pinMode(pinButton2, INPUT);      // declare Button2 as input
+  pinMode(pinButton3, INPUT);      // declare Button3 as input
+  pinMode(pinVibreur, OUTPUT);      // declare vibrator as input
+  pinMode(pinCapInf, INPUT);     // declare sensor as input
+  Serial.begin(9600);
+}
+
+void loop(){
+   //Serial.println("Debut");
+   // Program only begin if the user push the button
+   // It also means that the user goes to bed
+   int start = digitalRead(pinButton1);
+   if (start==HIGH){
+    mode = 1;
+    digitalWrite(pinVibreur,1);
+    delay(500);
+    digitalWrite(pinVibreur,0);
+    // We enter in mode 1, the user tries to fall alsleep
+    Serial.println("Le reveil est lance ! ");
+    Serial.print("Je vous reveillerai dans ");
+    Serial.print(SleepTime);
+    Serial.println("ms.");
+    // It gives informations and sleeptime to the user
+    }
+   while (mode==1){
+
+    Serial.println("Phase d'endormissement");
+    lcd.setCursor(0,0);
+    lcd.print("Endormissement...");
+    lcd.setCursor(0,1);
+    lcd.print("               ");
+    //This counter and the mode are the two key
+    //values of our program
+    sleepstep = 0;
+    while (sleepstep<10){
+      //Here, we have a loop on 10 minutes that check if the user
+      //fell asleep, which means that the infrared captor
+      //caught 10 LOW
+      compteur = compteur+100;
+      int val = digitalRead(pinCapInf);
+      tauxImo = tauxImo + val;
+      lcd.setCursor(0,1);
+      lcd.print(sleepstep);
+      lcd.setCursor(1,1);
+      lcd.print("/10 ");
+      AlarmCheck();
+      delay(100);
+      sleepstep = sleepstep+1;
+      Serial.println("Prise : ");
+      Serial.println(sleepstep);
+      if(val==1){
+        Serial.println("en mouvement");
+        lcd.setCursor(5,1);
+        lcd.print("Mouvement");
+      }  
+      else{
+        Serial.println("immobile");
+        lcd.setCursor(5,1);
+        lcd.print("Immobile");
+      }
+    }
+    Serial.println(tauxImo);
+    if (tauxImo == 0){
+      Serial.println("L'utilisateur est endormi.");
+      lcd.setCursor(1,0);
+      lcd.print("Utili. endormi");
+      delay(100);
+      mode = 2;
+    }
+    else{
+      Serial.println("L'utilisateur n'est pas encore endormi.");
+      lcd.setCursor(1,0);
+      lcd.print("Pas endormi");
+      delay(100);
+      sleepstep = 0;
+      tauxImo =0;
+    }
+   }
+   if (mode==2){
+     lcd.setCursor(1,0);
+     lcd.print("                ");
+     lcd.setCursor(0,0);
+     lcd.print("Phase de sommeil");
+     tempsendormissement = compteur;
+   }
+   while (mode ==2){
+    lcd.setCursor(0,1);
+    lcd.print("                ");
+    compteur = compteur+100;
+    Serial.println("Le reveil sonne dans : ");
+    Serial.print(SleepTime-compteur);
+    lcd.setCursor(0,1);
+    lcd.print(SleepTime-compteur);
+    temp = analogRead(tempPin);
+    temp = ((double(temp)/1024)*5-0.5)*100;
+    Serial.print(temp);
+    sommetemp = sommetemp + temp;
+    AlarmCheck();
+    delay(1000);
+   }
+   if (mode==3){
+     lcd.setCursor(0,0);
+     lcd.print("                ");
+     lcd.setCursor(0,1);
+     lcd.print("                ");
+     lcd.setCursor(0,0);
+     lcd.print("Phase d'alarme");
+   }
+   while (mode ==3){
+    Serial.println("Phase d'alarme");
+    int i = 0;
+    while (i<=15){
+      digitalWrite(pinVibreur, HIGH);
+      lcd.setCursor(0,0);
+      lcd.print("BIP               ");
+      Serial.println("BIP");
+      delay(100);
+      digitalWrite(pinVibreur, LOW);
+      i = i+1;
+      int snooze = digitalRead(pinButton2);
+      if (snooze == HIGH){
+        mode =4;
+        i = 16;
+        CTsnooze = CTsnooze+1;
+      }
+      int stop = digitalRead(pinButton3);
+      if (stop == HIGH){
+        Serial.println("Je vous souhaite une bonne journee !");
+        lcd.setCursor(0,1);
+        lcd.print("Bonne journee");
+        mode = 6;
+        i = 16;
+      }
+    }
+     if (mode==3){
+       mode = 5;
+     }
+   }
+   if (mode==4){
+     lcd.setCursor(0,0);
+     lcd.print("                ");
+     lcd.setCursor(0,1);
+     lcd.print("                ");
+     lcd.setCursor(0,0);
+     lcd.print("Phase Snooze");
+   }
+   while (mode ==4){
+    Serial.println("Phase Snooze");
+    int compteursnooze = 0;
+    while( compteursnooze <= SnoozeTime){
+      compteursnooze = compteursnooze + 100;
+      delay(100);
+      Serial.println("Snooze : nouvelle sonnerie dans ");
+      Serial.println(SnoozeTime-compteursnooze);
+      lcd.setCursor(0,1);
+      lcd.print("Restant");
+      lcd.setCursor(9,1);
+      lcd.print(SnoozeTime-compteursnooze);
+    }
+    mode = 3;
+   }
+   if (mode==5){
+     lcd.setCursor(0,0);
+     lcd.print("                ");
+     lcd.setCursor(0,1);
+     lcd.print("                ");
+     lcd.setCursor(0,0);
+     lcd.print("Phase sans reponse");
+   }
+   while (mode ==5){
+    Serial.println("Phase sans reponse");
+    CTsleepback = CTsleepback+1;
+    sleepstep = 0;
+    int tauxImo = 0;
+    while (sleepstep<10){
+      //Here, we have a loop on 10 minutes that check if the user
+      //fell back asleep, which means that the infrared captor
+      //caught 10 LOW
+      compteur = compteur+(100);
+      int val = digitalRead(pinCapInf);
+      tauxImo = tauxImo + val;
+      lcd.setCursor(0,1);
+      lcd.print(sleepstep);
+      lcd.setCursor(1,1);
+      lcd.print("/10 ");
+      AlarmCheck();
+      delay(100);
+      sleepstep = sleepstep+1;
+      Serial.println("Prise : ");
+      Serial.println(sleepstep);
+      if(val==1){
+        Serial.println("en mouvement");
+        lcd.setCursor(5,1);
+        lcd.print("Mouvement");
+      }  
+      else{
+        Serial.println("immobile");
+        lcd.setCursor(5,1);
+        lcd.print("Immobile");
+      }
+    Serial.println(tauxImo);
+    }
+    if (tauxImo == 0){
+      mode = 3;
+    }
+    else{
+      Serial.print("Continuez de vous reveillez doucement, je vous souhaite une bonne journée.");
+      mode = 0;
+      lcd.setCursor(0,1);
+      lcd.print("Bonne journee !");
+      mode = 6;
+    }
+   }
+   if (mode==5){
+     lcd.setCursor(0,0);
+     lcd.print("                ");
+     lcd.setCursor(0,1);
+     lcd.print("                ");
+     lcd.setCursor(0,0);
+     lcd.print("Phase Bilan");
+   }
+   while (mode ==6){
+    Serial.println("Voici le bilan de votre sommeil");
+    
+     //Temps d'endormissement
+    lcd.setCursor(0,0);
+    lcd.print("Temp endorm. :     ");
+    lcd.setCursor(0,1);
+    lcd.print("                      ");
+    lcd.setCursor(0,1);
+    lcd.print(tempsendormissement);
+    delay(4000);
+     
+    //Temps de sommeil
+    lcd.setCursor(0,0);
+    lcd.print("Temps de sommeil    ");
+    lcd.setCursor(0,1);
+    lcd.print("                      ");
+    lcd.setCursor(0,1);
+    tempsdesommeil = SleepTime-tempsendormissement;
+    lcd.print(tempsdesommeil);
+    delay(4000);
+     
+    //Snooze utilises :
+    lcd.setCursor(0,0);
+    lcd.print("Reiteration snooze     ");
+    lcd.setCursor(0,1);
+    lcd.print("                      ");
+    lcd.setCursor(0,1);
+    lcd.print(CTsnooze);
+    delay(4000);
+     
+    //Recc endormi
+    lcd.setCursor(0,0);
+    lcd.print("Sleepback :      ");
+    lcd.setCursor(0,1);
+    lcd.print("                      ");
+    lcd.setCursor(0,1);
+    lcd.print(CTsleepback);
+    delay(4000);
+     
+    moyennetemp = sommetemp/((SleepTime-tempsendormissement)/100);
+    Serial.println(SleepTime-tempsendormissement);
+    Serial.println(sommetemp);
+    Serial.println(moyennetemp);
+    //Temps de sommeil
+    lcd.setCursor(0,0);
+    lcd.print("Temperature moyenne     ");
+    lcd.setCursor(0,1);
+    lcd.print("                      ");
+    lcd.setCursor(0,1);
+    lcd.print(moyennetemp);
+    delay(4000);
+    mode = 0;
+     
+   }
+   
+}
+
+void AlarmCheck(){
+  if (compteur >= SleepTime){
+    //Serial.println("AlarmCheck ");
+    //Serial.println(" ");
+    //Serial.println("compteur : ");
+    //Serial.print(compteur);
+    //Serial.println("SleepTime : ");
+    //Serial.print(SleepTime);
+    mode = 3;
+  }
+  
+}
